@@ -1,0 +1,644 @@
+#!/bin/python3
+
+import os
+import sys
+import pickle
+
+# location to save to-do list data
+save_filepath = os.path.expanduser('~/.config/todo.pickle')
+backup_filepath = os.path.expanduser('~/.config/todo_backup.pickle')
+
+
+############################################################################
+#
+#	contents
+#
+############################################################################
+
+"""
+contents
+	this section, lists organization of this document
+
+usage
+	contains help-text describing usage
+
+notes
+	notes on the internal workings, useful for reading the code
+
+utilities
+	start of the code---basic utilities for parsing command line input,
+	pretty-printing, and translating between data types
+
+task / task_list classes
+	core of the code---basically what it sounds like, classes for
+	task and task list objects
+
+execution
+	point of contact with command line, top-level execution of code
+"""
+
+
+############################################################################
+#
+#	usage
+#
+############################################################################
+
+help_text = """
+todo - command line to-do list
+
+usage:
+    todo <command> <args>
+
+commands and arguments:
+<id> means a period-delimited list of numbers, e.g. 1.4.2
+<name> means a string (quotes optional), e.g. check email
+
+	list				pretty-print to-do list
+		[-parent <id>]		only print specified task and subtasks
+
+	add <name>			add a task
+		[-parent <id>]		add as subtask of specified task
+
+	rm <id>				remove a task
+	finish, remove			aliases for rm
+
+	promote <id>		promote a task in list order
+		[-to <int>]			specify rank to promote to
+		[-by <int>]			specify number of ranks to promote by
+							(both operate on lowest level rank, 
+							e.g. 'promote 1.4.5 -to 3' -> 1.4.3)
+	demote <id>			demote a task in list order
+		[-to, -by]			same as promote (above)
+	
+	rename <id> <name>
+						rename a task
+
+	fold <id>			fold a task, i.e. children are not printed
+							by 'todo list'
+
+	focus <id>			focus on specified task
+							equivalent to always including
+							'-parent <id>' in commands that accept
+							a parent (i.e. list, add)
+
+	unfocus				remove focus
+"""
+
+# to print if save filepath is rejected
+save_filepath_help = 'You can edit this script to change save_filepath to the desired location.'
+
+
+############################################################################
+#
+#	notes
+#
+############################################################################
+
+"""
+Tasks are located by ID, a collection of numbers specifying subtask indices.
+- IDs are displayed externally as period delimited strings indexing by 1,
+	e.g. '1.4.2'
+- IDs are used internally as lists of ints indexing by 0,
+	e.g. [ 0, 3, 1 ]	(corresponding to '1.4.2' above).
+- utilities ID_to_list and ID_to_str convert between them
+- each task stores its own ID, which is updated whenever it may have changed
+
+Arguments are read from command line into a dict (see parse_args utility)
+- some are standalone flags, and are set to True if received
+	e.g. 'todo list -verbose' results in { 'verbose' : True } in dict
+- some are flags with parameters
+	e.g. 'todo add -parent 1.4 ...' results in { 'parent' : '1.4' } in dict
+- usually one argument is expected without a flag
+	- depending on context, specifies name or ID of a task
+	- called 'main' in dict
+	e.g. 'todo add "email"' results in { 'main' : 'email' } in dict
+Arguments are passed by dict unpacking
+	e.g. 'todo add "email"'
+		-> args = { 'main' : 'email" }
+		-> todo_list.add(**args)
+	thus class task_list methods generally take an argument 'main', which
+		is renamed inside the method to clarify its role
+
+Two main classes:
+	class task holds basic task info and subtasks
+	class task_list accepts commands and passes them to the appropriate task
+		holds a root task which is the root of the task tree
+"""
+
+############################################################################
+#
+#	utilities
+#
+############################################################################
+
+
+# change ID from internal list form to external string form
+def ID_to_str(ID_list):
+	# change from index by 0 to index by 1, and from int to str
+	l = [str(i+1) for i in ID_list]
+	# join delimited by periods
+	return '.'.join(l)
+
+
+# change ID from external string form to internal list form 
+def ID_to_list(ID_str):
+	# if empty string, return empty list
+	if ID_str == '':
+		ID_list = []
+	# otherwise split by periods, convert from str to int, and
+	#	change from index by 1 to index by 0
+	else:
+		ID_list = [int(i) - 1 for i in ID_str.split('.')]
+	
+	return ID_list
+
+
+# split a string into ID list and name
+def parse_ID_name(s):
+	ID_str = ''
+	ID_chars = ['.'] + [str(i) for i in range(10)]
+	# chomp off ID string
+	while s and s[0] in ID_chars:
+		ID_str += s[0]
+		s = s[1:]
+	# the rest of 's' is now the name, except maybe whitespace
+	name = s.strip()
+
+	return ID_to_list(ID_str), name
+
+
+# append prefix to beginning of each line of text after the first
+def line_prefix(text, prefix):
+	# strip whitespace from both ends of text
+	text = text.strip()
+	# replace newlines with newline plus prefix
+	return text.replace('\n','\n'+prefix)
+
+
+# fit to-do list to line_width nicely
+def justify(text, width=None):
+	# if width was not passed, get it dynamically
+	if not width:
+		width = os.get_terminal_size().columns
+
+	# make lists of characters appearing in box-drawing prefix and in ID
+	prefix_chars = ['\u2500','\u2502','\u2514','\u251C',' ']
+	ID_chars = ['.']+[str(i) for i in range(10)]
+	
+	out = ''
+	# process each line independently
+	for line in text.splitlines():
+		# if line is short enough, just throw it in
+		if len(line) <= width:
+			out += line + '\n'
+			continue
+		# if it needs to be broken, carry on
+		
+		# chomp off box-drawing prefix
+		prefix = ''
+		while line and line[0] in prefix_chars:
+			prefix += line[0]
+			line = line[1:]
+		# chomp off ID string
+		ID_str = ''
+		while line and line[0] in ID_chars:
+			ID_str += line[0]
+			line = line[1:]
+		# strip whitespace (usually just a leading space)
+		line = line.strip()
+		# at this point 'line' var is just the name of the task
+
+		# determine prefix for lines after the first
+		newline_prefix = prefix.replace('\u251C','\u2502')
+		newline_prefix = newline_prefix.replace('\u2500',' ')
+		newline_prefix = newline_prefix.replace('\u2514',' ')
+		newline_prefix += ' '*(len(ID_str) + 1)	# +1 for the space after ID
+
+		# if newline prefix is as long as the line, make a fuss
+		assert len(newline_prefix) < width, 'justify: Line too long to justify'
+
+		# add to out until 'line' is empty
+		#	(recall by now 'line' just contains name of the task)
+
+		# number of columns left for name text
+		cols = width - len(newline_prefix)
+		# first line
+		out += prefix + ID_str + ' ' +  line[:cols] + '\n'
+		line = line[cols:]
+		# subsequent lines
+		while line:
+			out += newline_prefix + line[:cols] + '\n'
+			line = line[cols:]
+	
+	return out
+
+
+# save to-do list
+def save_tasks(todo_list, path):
+	with open(path, 'wb') as f:
+		pickle.dump(todo_list, f)
+
+
+# load to-do list
+def load_tasks(path):
+	# read from specified path
+	if os.path.isfile(path):
+		with open(path, 'rb') as f:
+			todo_list = pickle.load(f)
+	# if file doesn't exist, offer to create it
+	else:
+		print('Save file not found at '+save_filepath)
+		yn = input('Create it? [y/n] ')
+		assert yn[0] in ['y','Y'], 'No save file found or created'
+		# if asked to create it, make an empty to-do list and save it
+		todo_list = task_list()
+		with open(path, 'xb') as f:
+			pickle.dump(todo_list, f)
+
+	return todo_list
+
+
+# parse command-line arguments into a dict
+def parse_args(sysargs):
+	args = {}
+	while sysargs:
+		# grab the next argument
+		arg = sysargs[0]
+
+		# if it's a standalone flag, set that flag
+		#	 and go forward one arg
+		if arg == '-verbose':
+			args['verbose'] = True
+			sysargs = sysargs[1:]
+		elif arg == '-help':
+			args['help'] = True
+			sysargs = sysargs[1:]
+
+		# if it's not a standalone, read in key and value
+		#	and go forward two args
+		elif arg[0] == '-':
+			key = arg[1:]
+			value = sysargs[1]
+			args[key] = value
+			sysargs = sysargs[2:]
+
+		# if it's not accompanied by a flag, add to main argument
+		#	usually is name of task or ID string
+		else:
+			# if already started, append separated by a space
+			if 'main' in args:
+				args['main'] += ' ' + arg
+			# if not started, start it
+			else:
+				args['main'] = arg
+			
+			sysargs = sysargs[1:]
+	
+	return args
+
+
+############################################################################
+#
+#	task / task_list classes
+#
+############################################################################
+
+
+class task:
+	def __init__(self, name, start_date=None, end_date=None):
+		self.name = name				# name / description of task
+		self.ID_str = ''				# ID string for printing
+		self.subtasks = []				# list of subtasks
+		self.folded = False				# fold flag
+		self.end_date = end_date		# date to auto-forget task
+
+	# recursively update ID string of self and subtasks
+	def update_IDs(self, ID_list):
+		self.ID_str = ID_to_str(ID_list)
+		for index, sub in enumerate(self.subtasks):
+			sub.update_IDs(ID_list+[index])
+	
+	# produce a pretty list of self and subtasks
+	# returns it as a string
+	def ls(self):
+		out = ''	# output to build up
+
+		# add self
+		out += self.ID_str+' '+self.name+'\n'
+		
+		# if folded, end here
+		if self.folded:
+			# add indication of hidden subtasks if there are any
+			if self.subtasks:
+				out += '\u2514\u2500 ...\n'
+			return out
+
+		# add sub to-do lists with box-drawing indentation
+		for i, sub in enumerate(self.subtasks):
+			# treats last subtask differently for box-drawing
+			if i < len(self.subtasks) - 1:
+				out += '\u251C\u2500'
+				out += line_prefix(sub.ls(), '\u2502 ')
+				out += '\n'
+			else:
+				out += '\u2514\u2500'
+				out += line_prefix(sub.ls(), '  ')
+				out += '\n'
+		
+		return out
+
+	# add a subtask
+	# returns new task
+	def add_subtask(self, name):
+		# append new task to subtasks
+		self.subtasks.append(task(name))
+
+		# return the index of the new task
+		return self.subtasks[-1]
+
+	# remove a subtask
+	# returns removed subtask, or False if failed
+	def remove_subtask(self, index):
+		# if there are children, verify with user
+		if self.subtasks[index].subtasks:
+			yn = input('remove task and all children? [y/n] ')
+			# if declined, return False
+			if yn[0] not in ['y','Y']:
+				return False
+
+		# remove task and return it
+		return self.subtasks.pop(index)
+
+	# move a subtask
+	# returns moved subtask
+	def move_subtask(self, index, new_index):
+		# pop from old index
+		sub = self.subtasks.pop(index)
+		# insert in new index
+		self.subtasks.insert(new_index, sub)
+
+		return sub
+
+
+class task_list:
+	def __init__(self):
+		self.root = task(name='root')
+		self.focus = []
+
+	# find and return task for given ID list
+	def grab_task(self, ID_list):
+		t = self.root
+		for index in ID_list:
+			t = t.subtasks[index]
+		return t
+
+	# update ID strings in tasks
+	def update_IDs(self):
+		self.root.update_IDs([])
+
+	# pretty-print task list
+	def ls(self, parent='', **kwargs):
+		# convert parent ID to list form, or use focus if no parent
+		if parent:
+			parent = ID_to_list(parent)
+		else:
+			parent = self.focus
+
+		t_list = ''
+		# if parent / focus is set, list that task
+		if parent:
+			t_list = self.grab_task(parent).ls()
+		# if not, concatenate lists for each top-level task
+		else:
+			for sub in self.root.subtasks:
+				t_list += sub.ls()
+
+		# justify and strip whitespace
+		t_list = justify(t_list).strip()
+		print(t_list)
+			
+
+	# add a new task
+	def add(self, main, parent=''):
+		# arg 'main' is name / description of task
+		name = main
+		# convert parent ID to list form, or use focus if no parent
+		if parent:
+			parent = ID_to_list(parent)
+		else:
+			parent = self.focus
+
+		# grab parent and add subtask
+		new_task = self.grab_task(parent).add_subtask(name)
+
+		# update task IDs
+		self.update_IDs()
+
+		# print new task
+		print('added:\n'+new_task.ls().strip())
+
+	# remove a task
+	def remove(self, main):
+		# arg 'main' is ID string of task to remove
+		ID_list = ID_to_list(main)
+
+		# pop index off end of ID_list, leaving parent ID in ID_list
+		index = ID_list.pop()
+
+		# grab parent and remove subtask
+		removed = self.grab_task(ID_list).remove_subtask(index)
+
+		# print removed task if succeeded
+		if removed:
+			print('removed:\n'+removed.ls().strip())
+		else:
+			print('no changes made.')
+
+		# update task IDs
+		self.update_IDs()
+
+	# promote task
+	# also used to demote tasks by setting 'by' negative
+	def promote(self, main, to='', by=''):
+		# arg 'main' is ID string of task to promote
+		ID_list = ID_to_list(main)
+
+		# pop index off end of ID_list, leaving parent ID in ID_list
+		index = ID_list.pop()
+
+		# determine new index of task
+		# if 'to' is passed, use that
+		if to:
+			# convert from indexing by 1 to indexing by 0
+			new_index = int(to) - 1
+		# else if 'by' is passed, use that
+		elif by:
+			new_index = index - int(by)
+		# if neither 'to' nor 'by' is passed, default to promote by 1
+		else:
+			new_index = index - 1
+		# make sure new index is at least 0
+		new_index = max( new_index, 0 )
+
+		# move task, update IDs, print
+		moved_task = self.grab_task(ID_list).move_subtask(index, new_index)
+		self.update_IDs()
+		print('moved:\n'+moved_task.ls().strip())
+	
+	# demote task
+	def demote(self, main, to='', by=''):
+		# to demote, use promote, but change 'by' to negative
+		if by:
+			by = -int(by)
+		# default to 'by -1', will be overridden anyhow if 'to' is passed
+		else:
+			by = -1
+
+		self.promote(main=main, to=to, by=by)
+	
+	# rename task
+	def rename(self, main):
+		# arg 'main' is string with ID and new name
+		ID_list, name = parse_ID_name(main)
+
+		# grab task and rename it
+		t = self.grab_task(ID_list)
+		t.name = name
+
+		# print task with new name
+		print(t.ls().strip())
+	
+	# fold task
+	def fold(self, main):
+		# arg 'main' is ID string of task to fold
+		ID_list = ID_to_list(main)
+
+		# grab task and fold it
+		t = self.grab_task(ID_list)
+		t.folded = True
+
+		# print folded task
+		print(t.ls().strip())
+	
+	# unfold task
+	def unfold(self, main):
+		# arg 'main' is ID string of task to unfold
+		ID_list = ID_to_list(main)
+
+		# grab task and fold it
+		t = self.grab_task(ID_list)
+		t.folded = False
+
+		# print folded task
+		print(t.ls().strip())
+	
+	# set focus
+	def set_focus(self, main):
+		# arg 'main' is ID string of task to focus on
+		self.focus = ID_to_list(main)
+
+		# print focused task list
+		self.ls()
+
+	# un-set focus
+	def unset_focus(self):
+		self.focus = []
+
+
+
+
+############################################################################
+#
+#	execution
+#
+############################################################################
+
+
+# read command
+try:
+	command = sys.argv[1]
+# if no command, print help text and exit
+except IndexError as error:
+	print(help_text)
+	sys.exit()
+
+
+# read arguments into a dict
+try:
+	args = parse_args(sys.argv[2:])
+# may incur IndexError if command line arguments are incorrect
+except IndexError as error:
+	print('IndexError while parsing arguments. To check usage, run "todo".')
+	# if verbose is set to True, raise original error
+	if 'verbose' in args and args['verbose']:
+		raise error
+	sys.exit()
+
+
+# if help flag is set to True, print help and exit
+if 'help' in args and args['help']:
+	print(help_text)
+	sys.exit()
+
+
+# read to-do list from file
+try:
+	todo_list = load_tasks(save_filepath)
+# will incur AssertionError if file doesn't exist
+#	and user declines to create it
+except AssertionError as error:
+	print(save_filepath_help)
+	# if verbose is set to True, raise original error
+	if 'verbose' in args and args['verbose']:
+		raise error
+	sys.exit()
+
+
+# execute command
+try:
+	if command == 'list':
+		todo_list.ls(**args)
+	elif command == 'add':
+		todo_list.add(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command in ['rm','remove','forget','finish']:
+		todo_list.remove(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'promote':
+		todo_list.promote(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'demote':
+		todo_list.demote(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'rename':
+		todo_list.rename(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'fold':
+		todo_list.fold(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'unfold':
+		todo_list.unfold(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'focus':
+		todo_list.set_focus(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'unfocus':
+		todo_list.unset_focus(**args)
+		save_tasks(todo_list, save_filepath)
+	elif command == 'backup':
+		save_tasks(todo_list, backup_filepath)
+		print('backed up.')
+	elif command == 'update':
+		todo_list.update_IDs()
+		save_tasks(todo_list, save_filepath)
+	else:
+		print('command "'+command+'" not recognized. To check usage, run "todo".')
+# may incur TypeError if arguments are incorrect
+except TypeError as error:
+	print('Error passing arguments to "'+command+'". To check usage, run "todo".')
+	# if verbose is set to True, raise original error message
+	if 'verbose' in args and args['verbose']:
+		raise error
+
+
