@@ -3,6 +3,7 @@
 import os
 import sys
 import pickle
+import readline
 
 # location of data directory
 data_dir = os.path.expanduser('~/Documents/todo/pickle_jar/')
@@ -70,8 +71,9 @@ commands and arguments:
 	rm <id>				remove a task
 	finish, remove, fin		aliases for rm
 	
-	rename <id> <name>	rename a task
-		[-add]				add to name instead of replacing
+	rename <id> [<name>]	rename a task; if name is not specified,
+							supplies current name for editing
+		[-add]					append instead of replacing
 	
 	move <id>			move a task; requires one of the following:
 		-into <id2>			make a subtask of <id2>
@@ -563,12 +565,22 @@ class task_list:
 	# rename task
 	# returns a string describing new name
 	def rename(self, main, add=False):
-		# arg 'main' is string with ID and new name
+		# arg 'main' is string with ID and optionally new name
 		ID_list, name = parse_ID_name(main)
 
-		# grab task and rename it or add to name
 		t = self.grab_task(ID_list)
-		if add:
+
+		# if no name is specified, give current text for editing
+		if not name:
+			# much obliged to https://stackoverflow.com/a/2533142/791462
+			readline.set_startup_hook(lambda: readline.insert_text(t.name))
+			try:
+				name = input(t.ID_str+' ')
+				t.name = name
+			finally:
+				readline.set_startup_hook()
+		# if name was specified, rename or add to name
+		elif add:
 			t.name += ' '+name
 		else:
 			t.name = name
