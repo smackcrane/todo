@@ -97,6 +97,14 @@ commands and arguments:
 	close				equivalent to fold (current focus task) + unfocus
 	
 	full_upgrade		upgrade from a previous version (rarely needed)
+
+universal arguments, can be passed with any command
+
+	-verbose			re-throws errors that are normally handled by
+						a chiding print statement
+	
+	-quiet				does not clear screen and re-print todo list
+						
 """
 
 # to print if save filepath is rejected
@@ -359,7 +367,7 @@ def parse_args(sysargs):
 
 		# if it's a standalone flag, set that flag
 		#	 and go forward one arg
-		if arg in ['-verbose','-add','-all','-top','-help']:
+		if arg in ['-verbose','-quiet','-add','-all','-top','-help']:
 			args[arg[1:]] = True
 			sysargs = sysargs[1:]
 
@@ -714,10 +722,10 @@ class task_list:
 
 
 # read command
-try:
+if len(sys.argv) > 1:
 	command = sys.argv[1]
 # if no command, print help text and exit
-except IndexError as error:
+else:
 	print(help_text)
 	sys.exit()
 
@@ -730,12 +738,17 @@ except IndexError as error:
 	print('IndexError while parsing arguments. To check usage, run "todo -help".')
 	sys.exit()
 
-# check for verbose flag and remove it from args
+# check for universal flags and remove them from args
 if 'verbose' in args and args['verbose']:
 	verbose = True
 	del args['verbose']
 else:
 	verbose = False
+if 'quiet' in args and args['quiet']:
+	quiet = True
+	del args['quiet']
+else:
+	quiet = False
 
 # if help flag is set to True, print help and exit
 if 'help' in args and args['help']:
@@ -786,7 +799,7 @@ try:
 		sys.exit()
 	elif command == 'undo':
 		undo_list = undo(save_filepath, undo_filepaths)
-		if undo_list:
+		if undo_list and not quiet:
 			clear_screen()
 			print(undo_list.ls())
 		sys.exit()
@@ -794,12 +807,16 @@ try:
 		print('command "'+command+'" not recognized. To check usage, run "todo -help".')
 		sys.exit()
 	
-	# clear screen
-	clear_screen()
-	# print and save
-	print(todo_list.ls())
+	if not quiet:
+		# clear screen and print
+		clear_screen()
+		print(todo_list.ls())
+	# print description if there's anything to say
 	if description:
-		print('\n'+description.strip())
+		# if we just printed the todo list, add a newline, if not then not
+		if not quiet:
+			print()
+		print(description.strip())
 	save_tasks(todo_list, save_filepath, undo_filepaths)
 
 # some methods throw AssertionError if they're unhappy
