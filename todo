@@ -65,15 +65,15 @@ commands and arguments:
 
 	add <name>			add a task
 		[-sub <id>]			add as subtask of specified task
+		[-top]				at at top of list (rather than default bottom)
 
 	rm <id>				remove a task
-	finish, remove			aliases for rm
+	finish, remove, fin		aliases for rm
 	
 	rename <id> <name>	rename a task
 		[-add]				add to name instead of replacing
 	
-	move <id>			move a task; requires exactly one of the
-						following arguments:
+	move <id>			move a task; requires one of the following:
 		-into <id2>			make a subtask of <id2>
 		-to <id2>			move to position <id2>
 		-upto <int>			move up to rank <int> within parent
@@ -82,20 +82,21 @@ commands and arguments:
 		-downby <int>		move down <int> ranks within parent
 
 	fold <id>			fold a task, i.e. children are not printed
-							by 'todo list'
-	unfold <id>			unfold a task
+		[-all]				fold all top-level tasks
 
-	focus <id>			focus on specified task
-							equivalent to always including
-							'-parent <id>' in commands that accept
-							a parent (i.e. list, add)
+	unfold <id>			unfold a task
+		[-all]				unfold all top-level tasks
+
+	focus <id>			focus on specified task; equivalent to always
+						including '-sub <id>' in commands that accept it
 
 	unfocus				remove focus
 
 	open <id>			equivalent to unfold + focus
 
-	close				equivalent to fold (currently focused task)
-							+ unfocus
+	close				equivalent to fold (current focus task) + unfocus
+	
+	full_upgrade		upgrade from a previous version (rarely needed)
 """
 
 # to print if save filepath is rejected
@@ -196,60 +197,75 @@ def line_prefix(text, prefix):
 	return text.replace('\n','\n'+prefix)
 
 
+# sub-utility for justify function below
+def split_prefix_ID_name(line):
+	# make lists of characters appearing in box-drawing prefix and in ID
+	prefix_chars = ['\u2500','\u2502','\u2514','\u251C',' ']
+	ID_chars = ['.']+[str(i) for i in range(10)]
+
+	# chomp off box-drawing prefix
+	prefix = ''
+	while line and line[0] in prefix_chars:
+		prefix += line[0]
+		line = line[1:]
+	# chomp off ID string
+	ID_str = ''
+	while line and line[0] in ID_chars:
+		ID_str += line[0]
+		line = line[1:]
+	# strip whitespace (usually just a leading space)
+	name = line.strip()
+
+	return prefix, ID_str, name
+
+
 # fit to-do list to line_width nicely
 def justify(text, width=None):
 	# if width was not passed, get it dynamically
 	if not width:
 		width = os.get_terminal_size().columns
 
-	# make lists of characters appearing in box-drawing prefix and in ID
-	prefix_chars = ['\u2500','\u2502','\u2514','\u251C',' ']
-	ID_chars = ['.']+[str(i) for i in range(10)]
-	
 	out = ''
-	# process each line independently
-	for line in text.splitlines():
+	lines = text.splitlines()
+	# process each line independently, except checking the next line
+	for i, line in enumerate(lines):
 		# if line is short enough, just throw it in
 		if len(line) <= width:
 			out += line + '\n'
 			continue
 		# if it needs to be broken, carry on
-		
-		# chomp off box-drawing prefix
-		prefix = ''
-		while line and line[0] in prefix_chars:
-			prefix += line[0]
-			line = line[1:]
-		# chomp off ID string
-		ID_str = ''
-		while line and line[0] in ID_chars:
-			ID_str += line[0]
-			line = line[1:]
-		# strip whitespace (usually just a leading space)
-		line = line.strip()
-		# at this point 'line' var is just the name of the task
 
+		# split up prefix, ID string, and name
+		prefix, ID_str, name = split_prefix_ID_name(line)
+
+		# janky check if the next line is a child of this line
+		# will affect one character of newline_prefix below
+		blox = ' '	# default just a space
+		if i+1 < len(lines):
+			next_prefix, _ , _ = split_prefix_ID_name(lines[i+1])
+			if len(next_prefix) > len(prefix):
+				# if it is a child, we need an extra box-drawing character
+				blox = '\u2502'
+		
 		# determine prefix for lines after the first
 		newline_prefix = prefix.replace('\u251C','\u2502')
 		newline_prefix = newline_prefix.replace('\u2500',' ')
 		newline_prefix = newline_prefix.replace('\u2514',' ')
-		newline_prefix += ' '*(len(ID_str) + 1)	# +1 for the space after ID
+		newline_prefix += blox + ' '*len(ID_str)
 
 		# if newline prefix is as long as the line, make a fuss
 		assert len(newline_prefix) < width, 'justify: Line too long to justify'
 
-		# add to out until 'line' is empty
-		#	(recall by now 'line' just contains name of the task)
-
+		# add to out until 'name' is empty
 		# number of columns left for name text
 		cols = width - len(newline_prefix)
 		# first line
-		out += prefix + ID_str + ' ' +  line[:cols] + '\n'
-		line = line[cols:]
+		out += prefix + ID_str + ' ' +  name[:cols] + '\n'
+		name = name[cols:]
 		# subsequent lines
-		while line:
-			out += newline_prefix + line[:cols] + '\n'
-			line = line[cols:]
+		while name:
+			out += newline_prefix + name[:cols] + '\n'
+			name = name[cols:]
 	
 	# stripe whitespace and return
 	return out.strip()
@@ -343,7 +359,7 @@ def parse_args(sysargs):
 
 		# if it's a standalone flag, set that flag
 		#	 and go forward one arg
-		if arg in ['-verbose', '-add', '-all', '-help']:
+		if arg in ['-verbose','-add','-all','-top','-help']:
 			args[arg[1:]] = True
 			sysargs = sysargs[1:]
 
@@ -383,12 +399,26 @@ def clear_screen():
 
 
 class task:
-	def __init__(self, name, start_date=None, end_date=None):
+	def __init__(self, name):
 		self.name = name				# name / description of task
 		self.ID_str = ''				# ID string for printing
 		self.subtasks = []				# list of subtasks
 		self.folded = False				# fold flag
-		self.end_date = end_date		# date to auto-forget task
+		self.format = ''			# formatting for print
+
+	# upgrade from previous versions
+	def full_upgrade(self):
+		# check if attributes exist, and create them if not
+		try: self.ID_str
+		except AttributeError: self.ID_str = ''
+		try: self.folded
+		except AttributeError: self.folded = False
+		try: self.format
+		except AttributeError: self.format = ''
+
+		# recurse to subtasks
+		for sub in self.subtasks:
+			sub.full_upgrade()
 
 	# recursively update ID string of self and subtasks
 	def update_IDs(self, ID_list):
@@ -402,7 +432,7 @@ class task:
 		out = ''	# output to build up
 
 		# add self
-		out += self.ID_str+' '+self.name+'\n'
+		out += self.format+self.ID_str+' '+self.name+'\n'
 		
 		# if folded, end here
 		if self.folded:
@@ -438,6 +468,15 @@ class task_list:
 			t = t.subtasks[index]
 		return t
 
+	# upgrade from previous version
+	def full_upgrade(self):
+		# check if attributes exist, and if not create them
+		try: self.focus
+		except AttributeError: self.focus = []
+
+		# send it down to the task tree
+		self.root.full_upgrade()
+
 	# update ID strings in tasks
 	# no return value
 	def update_IDs(self):
@@ -465,7 +504,7 @@ class task_list:
 			
 	# add a new task
 	# returns string describing addition
-	def add(self, main, sub=''):
+	def add(self, main, sub='', top=False):
 		# arg 'main' is name / description of task
 		name = main
 		# convert parent ID 'sub' to list form, or use focus if no parent
@@ -475,8 +514,12 @@ class task_list:
 			parent = self.focus
 
 		# make new task and add to parent
+		#	at the top of the list if specified, otherwise at the bottom
 		new_task = task(name)
-		self.grab_task(parent).subtasks.append(new_task)
+		if top:
+			self.grab_task(parent).subtasks.insert(0, new_task)
+		else:
+			self.grab_task(parent).subtasks.append(new_task)
 
 		# update task IDs
 		self.update_IDs()
@@ -502,12 +545,12 @@ class task_list:
 			removed = self.grab_task(ID_list).subtasks.pop(index)
 
 			# add removed task to description
-			out += 'removed:\n'+justify(removed.ls())
+			out += 'removed:\n'+justify(removed.ls())+'\n'
 
 		# update task IDs
 		self.update_IDs()
 
-		return out
+		return out.strip()
 
 	# rename task
 	# returns a string describing new name
@@ -567,7 +610,7 @@ class task_list:
 			t = p.subtasks.pop(index)
 			p.subtasks.insert(new_index, t)
 		else:
-			return '"move" needs an argument. To check usage, run "todo".'
+			assert False, '"move" needs an argument. To check usage, run "todo -help".'
 		
 		# update IDs
 		self.update_IDs()
@@ -639,6 +682,29 @@ class task_list:
 		self.grab_task(self.focus).folded = True
 		self.focus = []
 
+	formats = {} 
+#				'none'		: '\033[0m',
+#				'bold'		: '\033[1m',
+#				'italic'	: '\033[3m',
+#				'underline'	: '\033[4m',
+#				'blink'		: '\033[5m',
+#				'invisible'	: '\033[30m',
+#				'red'		: '\033[31m',
+#				'green'		: '\033[32m',
+#				'orange'	: '\033[33m',
+#				'pink'		: '\033[35m',
+#				'cyan'		: '\033[36m'}
+
+	# format task
+	# no return value
+	def format_task(self, main):
+		# arg 'main' is ID strig of task and key string for format dict
+		ID_list, form = parse_ID_name(main)
+
+		assert form in formats, 'format "'+form+'" not recognized\nknown formats: '+' '.join(formats.keys())
+
+		self.grab_task(ID_list).format = formats[form]
+
 
 ############################################################################
 #
@@ -661,7 +727,7 @@ try:
 	args = parse_args(sys.argv[2:])
 # may incur IndexError if command line arguments are incorrect
 except IndexError as error:
-	print('IndexError while parsing arguments. To check usage, run "todo".')
+	print('IndexError while parsing arguments. To check usage, run "todo -help".')
 	sys.exit()
 
 # check for verbose flag and remove it from args
@@ -695,7 +761,7 @@ description = False
 # execute command
 try:
 	if command == 'add': description = todo_list.add(**args)
-	elif command in ['rm','remove','forget','finish']:
+	elif command in ['rm','remove','forget','finish','fin']:
 		description = todo_list.remove(**args)
 	elif command == 'move': description = todo_list.move(**args)
 	elif command == 'rename': description = todo_list.rename(**args)
@@ -706,6 +772,8 @@ try:
 	elif command == 'open': description = todo_list.open_task(**args)
 	elif command == 'close': description = todo_list.close_task(**args)
 	elif command == 'update': description = todo_list.update_IDs()
+	elif command == 'format': description = toto_list.format(**args)
+	elif command == 'full_upgrade': description = todo_list.full_upgrade()
 	# special commands that don't fall through to save and print
 	elif command == 'backup':
 		save_tasks(todo_list, backup_filepath)
@@ -719,10 +787,11 @@ try:
 	elif command == 'undo':
 		undo_list = undo(save_filepath, undo_filepaths)
 		if undo_list:
+			clear_screen()
 			print(undo_list.ls())
 		sys.exit()
 	else:
-		print('command "'+command+'" not recognized. To check usage, run "todo".')
+		print('command "'+command+'" not recognized. To check usage, run "todo -help".')
 		sys.exit()
 	
 	# clear screen
@@ -730,14 +799,20 @@ try:
 	# print and save
 	print(todo_list.ls())
 	if description:
-		print('\n'+description)
+		print('\n'+description.strip())
 	save_tasks(todo_list, save_filepath, undo_filepaths)
 
+# some methods throw AssertionError if they're unhappy
+except AssertionError as error:
+	print(error.args[0])
+	if verbose:
+		raise error
 # may incur TypeError if arguments are incorrect
 except TypeError as error:
-	print('Error passing arguments to "'+command+'". To check usage, run "todo".')
+	print('Error passing arguments to "'+command+'". To check usage, run "todo -help".')
 	# if verbose is set to True, raise original error message
 	if verbose:
 		raise error
+
 
 
