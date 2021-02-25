@@ -97,6 +97,9 @@ commands and arguments:
 	open <id>			equivalent to unfold + focus
 
 	close				equivalent to fold (current focus task) + unfocus
+
+	format <id> <str>	format a task with format <str>
+						to see known formats, try it and the error will say
 	
 	full_upgrade		upgrade from a previous version (rarely needed)
 
@@ -208,7 +211,7 @@ def line_prefix(text, prefix):
 
 
 # sub-utility for justify function below
-def split_prefix_ID_name(line):
+def chomp(line):
 	# make lists of characters appearing in box-drawing prefix and in ID
 	prefix_chars = ['\u2500','\u2502','\u2514','\u251C',' ']
 	ID_chars = ['.']+[str(i) for i in range(10)]
@@ -218,15 +221,32 @@ def split_prefix_ID_name(line):
 	while line and line[0] in prefix_chars:
 		prefix += line[0]
 		line = line[1:]
+	# chomp off format escape code if there is one
+	form = ''
+	if line[0] == '\033':
+		# escape code starts with '\033' and ends with 'm'
+		# check condition at the end of the loop
+		#	because we want to break after chomping the 'm'
+		while line:
+			c = line[0]
+			form += c
+			line = line[1:]
+			if c == 'm':
+				break
 	# chomp off ID string
 	ID_str = ''
 	while line and line[0] in ID_chars:
 		ID_str += line[0]
 		line = line[1:]
+	# strip format escape code off the end of string if there is one
+	# do this by just deleting everything after the next '\033'
+	if '\033' in line:
+		idx = line.find('\033')
+		line = line[:idx]
 	# strip whitespace (usually just a leading space)
 	name = line.strip()
 
-	return prefix, ID_str, name
+	return prefix, form, ID_str, name
 
 
 # fit to-do list to line_width nicely
@@ -246,13 +266,13 @@ def justify(text, width=None):
 		# if it needs to be broken, carry on
 
 		# split up prefix, ID string, and name
-		prefix, ID_str, name = split_prefix_ID_name(line)
+		prefix, form, ID_str, name = chomp(line)
 
 		# janky check if the next line is a child of this line
-		# will affect one character of newline_prefix below
+		# will affect one character 'blox' of newline_prefix below
 		blox = ' '	# default just a space
 		if i+1 < len(lines):
-			next_prefix, _ , _ = split_prefix_ID_name(lines[i+1])
+			next_prefix, *_ = chomp(lines[i+1])
 			if len(next_prefix) > len(prefix):
 				# if it is a child, we need an extra box-drawing character
 				blox = '\u2502'
@@ -270,11 +290,11 @@ def justify(text, width=None):
 		# number of columns left for name text
 		cols = width - len(newline_prefix)
 		# first line
-		out += prefix + ID_str + ' ' +  name[:cols] + '\n'
+		out += prefix + form + ID_str + ' ' +  name[:cols] + '\033[0m\n'
 		name = name[cols:]
 		# subsequent lines
 		while name:
-			out += newline_prefix + name[:cols] + '\n'
+			out += newline_prefix + form + name[:cols] + '\033[0m\n'
 			name = name[cols:]
 	
 	# stripe whitespace and return
@@ -424,7 +444,7 @@ class task:
 		try: self.folded
 		except AttributeError: self.folded = False
 		try: self.format
-		except AttributeError: self.format = ''
+		except AttributeError: self.format = '\033[0m'
 
 		# recurse to subtasks
 		for sub in self.subtasks:
@@ -442,7 +462,7 @@ class task:
 		out = ''	# output to build up
 
 		# add self
-		out += self.format+self.ID_str+' '+self.name+'\n'
+		out += self.format+self.ID_str+' '+self.name+'\033[0m\n'
 		
 		# if folded, end here
 		if self.folded:
@@ -702,18 +722,18 @@ class task_list:
 		self.grab_task(self.focus).folded = True
 		self.focus = []
 
-	formats = {} 
-#				'none'		: '\033[0m',
-#				'bold'		: '\033[1m',
-#				'italic'	: '\033[3m',
-#				'underline'	: '\033[4m',
-#				'blink'		: '\033[5m',
-#				'invisible'	: '\033[30m',
-#				'red'		: '\033[31m',
-#				'green'		: '\033[32m',
-#				'orange'	: '\033[33m',
-#				'pink'		: '\033[35m',
-#				'cyan'		: '\033[36m'}
+	formats = { 
+				'none'		: '\033[0m',
+				'bold'		: '\033[1m',
+				'italic'	: '\033[3m',
+				'underline'	: '\033[4m',
+				'blink'		: '\033[5m',
+				'invisible'	: '\033[30m',
+				'red'		: '\033[31m',
+				'green'		: '\033[32m',
+				'orange'	: '\033[33m',
+				'pink'		: '\033[35m',
+				'cyan'		: '\033[36m'}
 
 	# format task
 	# no return value
@@ -721,9 +741,9 @@ class task_list:
 		# arg 'main' is ID strig of task and key string for format dict
 		ID_list, form = parse_ID_name(main)
 
-		assert form in formats, 'format "'+form+'" not recognized\nknown formats: '+' '.join(formats.keys())
+		assert form in self.formats, 'format "'+form+'" not recognized\nknown formats: '+' '.join(self.formats.keys())
 
-		self.grab_task(ID_list).format = formats[form]
+		self.grab_task(ID_list).format = self.formats[form]
 
 
 ############################################################################
@@ -797,7 +817,7 @@ try:
 	elif command == 'open': description = todo_list.open_task(**args)
 	elif command == 'close': description = todo_list.close_task(**args)
 	elif command == 'update': description = todo_list.update_IDs()
-	elif command == 'format': description = toto_list.format(**args)
+	elif command == 'format': description = todo_list.format_task(**args)
 	elif command == 'full_upgrade': description = todo_list.full_upgrade()
 	# special commands that don't fall through to save and print
 	elif command == 'backup':
