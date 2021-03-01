@@ -534,14 +534,14 @@ class task_list:
 			
 	# add a new task
 	# returns string describing addition
-	def add(self, main, sub='', top=False):
+	def add(self, main, sub=None, top=False):
 		# arg 'main' is name / description of task
 		name = main
 		# convert parent ID 'sub' to list form, or use focus if no parent
-		if sub:
-			parent = ID_to_list(sub)
-		else:
+		if sub == None:
 			parent = self.focus
+		else:
+			parent = ID_to_list(sub)
 
 		# make new task and add to parent
 		#	at the top of the list if specified, otherwise at the bottom
@@ -767,7 +767,7 @@ try:
 	args = parse_args(sys.argv[2:])
 # may incur IndexError if command line arguments are incorrect
 except IndexError as error:
-	print('IndexError while parsing arguments. To check usage, run "todo -help".')
+	print('Error while parsing arguments. To check usage, run "todo -help".')
 	sys.exit()
 
 # check for universal flags and remove them from args
