@@ -722,18 +722,20 @@ class task_list:
 		self.grab_task(self.focus).folded = True
 		self.focus = []
 
-	formats = { 
+	formats =	{ 
 				'none'		: '\033[0m',
 				'bold'		: '\033[1m',
 				'italic'	: '\033[3m',
 				'underline'	: '\033[4m',
-				'blink'		: '\033[5m',
+				'dim'		: '\033[38;5;240m',
 				'invisible'	: '\033[30m',
 				'red'		: '\033[31m',
-				'green'		: '\033[32m',
 				'orange'	: '\033[33m',
+				'green'		: '\033[32m',
+				'cyan'		: '\033[36m',
 				'pink'		: '\033[35m',
-				'cyan'		: '\033[36m'}
+				#'blink'		: '\033[5m',
+				}
 
 	# format task
 	# no return value
@@ -756,9 +758,9 @@ class task_list:
 # read command
 if len(sys.argv) > 1:
 	command = sys.argv[1]
-# if no command, print help text and exit
+# if no command, exit
 else:
-	print(help_text)
+	#print(help_text)
 	sys.exit()
 
 
@@ -809,7 +811,8 @@ try:
 	elif command in ['rm','remove','forget','finish','fin']:
 		description = todo_list.remove(**args)
 	elif command == 'move': description = todo_list.move(**args)
-	elif command == 'rename': description = todo_list.rename(**args)
+	elif command in ['rename','edit']:
+		description = todo_list.rename(**args)
 	elif command == 'fold': description = todo_list.fold(**args)
 	elif command == 'unfold': description = todo_list.unfold(**args)
 	elif command == 'focus': description = todo_list.set_focus(**args)
