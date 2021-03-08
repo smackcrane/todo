@@ -23,7 +23,8 @@ do
 		# anything else, add to history and execute
 		*)
 			history -s "$cmd"
-			xargs todo <<< $cmd
+			# neat way to use a string as command-line arguments
+			bash -c "todo $cmd"
 			echo ;;
 	esac
 done
