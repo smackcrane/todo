@@ -24,7 +24,7 @@ do
 		*)
 			history -s "$cmd"
 			# neat way to use a string as command-line arguments
-			bash -c "todo $cmd"
+			eval "todo $cmd"
 			echo ;;
 	esac
 done
