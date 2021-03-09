@@ -608,7 +608,8 @@ class task_list:
 		return 'renamed:\n'+justify(t.ls())
 
 	# move task
-	# returns string describing moved task (or failure to move)
+	# returns string describing moved task
+	# throws AssertionError if unhappy
 	def move(self, main, into='',
 					to='', upto='', upby='', downto='', downby=''):
 		# arg 'main' is ID string of task to move
@@ -727,6 +728,7 @@ class task_list:
 				'bold'		: '\033[1m',
 				'italic'	: '\033[3m',
 				'underline'	: '\033[4m',
+				'bright'	: '\033[38;2;255;255;255m',
 				'dim'		: '\033[38;5;240m',
 				'invisible'	: '\033[30m',
 				'red'		: '\033[31m',
