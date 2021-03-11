@@ -50,13 +50,15 @@ help_text = """
 todo - command line to-do list
 
 usage:
-    todo <command> <args>
+	<command> <args>
 
 commands and arguments:
 <id> means a period-delimited list of numbers, e.g. 1.4.2
 <name> means a string (quotes optional), e.g. check email
 
-	list				pretty-print to-do list
+	help				print a help text very much like this one
+
+	list				print to-do list
 		[-sub <id>]			only print specified task and subtasks
 
 	add <name>			add a task
@@ -102,7 +104,7 @@ universal arguments, can be passed with any command
 
 	-verbose			re-throws errors that are normally handled by
 						a chiding print statement
-"""
+""".replace('\t', '    ')
 
 # to print if save filepath is rejected
 save_filepath_help = 'You can edit this script to change save_filepath to the desired location.'
@@ -117,6 +119,8 @@ error_help = "To check usage, use 'help'."
 ############################################################################
 
 """
+Definition of utility functions and task / task_list classes in tasker.py
+
 Tasks are located by ID, a collection of numbers specifying subtask indices.
 - IDs are displayed externally as period delimited strings indexing by 1,
 	e.g. '1.4.2'
@@ -125,17 +129,17 @@ Tasks are located by ID, a collection of numbers specifying subtask indices.
 - utilities ID_to_list and ID_to_str convert between them
 - each task stores its own ID, which is updated whenever it may have changed
 
-Arguments are read from command line into a dict (see parse_args utility)
+Arguments are read from input() into a dict (see parse_args utility)
 - some are standalone flags, and are set to True if received
 	e.g. 'todo list -verbose' results in { 'verbose' : True } in dict
 - some are flags with parameters
-	e.g. 'todo add -parent 1.4 ...' results in { 'parent' : '1.4' } in dict
+	e.g. 'todo add -sub 1.4 ...' results in { 'sub' : '1.4' } in dict
 - usually one argument is expected without a flag
-	- depending on context, specifies name or ID of a task
+	- depending on context, specifies name or ID of a task or smth else
 	- called 'main' in dict
-	e.g. 'todo add "email"' results in { 'main' : 'email' } in dict
+	e.g. 'todo add email' results in { 'main' : 'email' } in dict
 Arguments are passed by dict unpacking
-	e.g. 'todo add "email"'
+	e.g. 'todo add email'
 		-> args = { 'main' : 'email" }
 		-> todo_list.add(**args)
 	thus class task_list methods generally take an argument 'main', which

@@ -15,9 +15,6 @@ import readline
 contents
 	this section, lists organization of this document
 
-usage
-	contains help-text describing usage
-
 utilities
 	start of the code---basic utilities for parsing command line input,
 	pretty-printing, and translating between data types
@@ -26,77 +23,6 @@ task / task_list classes
 	core of the code---basically what it sounds like, classes for
 	task and task list objects
 """
-
-
-############################################################################
-#
-#	usage
-#
-############################################################################
-
-help_text = """
-todo - command line to-do list
-
-usage:
-    todo <command> <args>
-
-commands and arguments:
-<id> means a period-delimited list of numbers, e.g. 1.4.2
-<name> means a string (quotes optional), e.g. check email
-
-	list				pretty-print to-do list
-		[-sub <id>]			only print specified task and subtasks
-
-	add <name>			add a task
-		[-sub <id>]			add as subtask of specified task
-		[-top]				at at top of list (rather than default bottom)
-
-	rm <id>				remove a task
-	finish, remove, fin		aliases for rm
-	
-	rename <id> [<name>]	rename a task; if name is not specified,
-							supplies current name for editing
-		[-add]					append instead of replacing
-	
-	move <id>			move a task; requires one of the following:
-		-into <id2>			make a subtask of <id2>
-		-to <id2>			move to position <id2>
-		-upto <int>			move up to rank <int> within parent
-		-upby <int>			move up <int> ranks within parent
-		-downto <int>		move down to rank <int> within parent
-		-downby <int>		move down <int> ranks within parent
-
-	fold <id>			fold a task, i.e. children are not printed
-		[-all]				fold all top-level tasks
-
-	unfold <id>			unfold a task
-		[-all]				unfold all top-level tasks
-
-	focus <id>			focus on specified task; equivalent to always
-						including '-sub <id>' in commands that accept it
-
-	unfocus				remove focus
-
-	open <id>			equivalent to unfold + focus
-
-	close				equivalent to fold (current focus task) + unfocus
-
-	format <id> <str>	format a task with format <str>
-						to see known formats, try it and the error will say
-	
-	full_upgrade		upgrade from a previous version (rarely needed)
-
-universal arguments, can be passed with any command
-
-	-verbose			re-throws errors that are normally handled by
-						a chiding print statement
-	
-	-quiet				does not clear screen and re-print todo list
-						
-"""
-
-# to print if save filepath is rejected
-save_filepath_help = 'You can edit this script to change save_filepath to the desired location.'
 
 
 ############################################################################

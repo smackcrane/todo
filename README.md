@@ -1,10 +1,16 @@
 ## todo --- Command Line To-Do List
 
+### Organization
+
+`tasker.py` contains the bulk of the code, functions and classes
+
+`todo` is the script that interacts with the command line
+
+`pickle_jar` is the directory for save files
+
 ### Usage
 
-`todo <command> <args>` manage to-do list from command line
-
-`toeditor` start an interactive editor (which behaves the same, except not having to type `todo` every time)
+`todo` from the command line opens to-do list in a basic editor. From there, commands are given as `<command> <args>` as described below.
 
 ##### Commands and arguments:
 
@@ -12,7 +18,9 @@
 
 \<name> means a string (quotes optional), e.g. check email
 
-    list                pretty-print to-do list
+	help				print a help text very much like this one
+
+    list                print to-do list
         [-sub <id>]         only print specified task and subtasks
 
     add <name>          add a task
@@ -59,13 +67,11 @@ universal arguments, can be passed with any command
 
     -verbose            re-throws errors that are normally handled by
                         a chiding print statement
-    
-    -quiet              does not clear screen and re-print todo list
 
 ### (My) Setup
 
 * Put contents of repo somewhere
-* Create symbolic links somewhere on the search path
+* Create symbolic link somewhere on the search path
 
 E.g.
 ```
@@ -73,9 +79,10 @@ cd ~/Documents
 git clone https://github.com/smackcrane/todo.git
 cd /usr/local/bin
 sudo ln -s ~/Documents/todo/todo todo
-sudo ln -s ~/Documents/todo/toeditor toeditor
 ```
 
 #### Written on Lubuntu
 
 No effort has been made yet for compatibility with other platforms.
+
+
