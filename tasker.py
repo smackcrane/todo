@@ -258,6 +258,11 @@ def parse_args(sysargs):
 		# grab the next argument
 		arg = sysargs[0]
 
+		# complain if it's empty
+		# it's not necessarily a problem to be empty,
+		#	but I've got into habits where it's useful to trash this case
+		assert arg, "empty main argument"
+
 		# if it's a standalone flag, set that flag
 		#	 and go forward one arg
 		if arg in ['-verbose','-quiet','-add','-all','-top','-help']:
