@@ -342,6 +342,8 @@ def parse_args(sysargs):
 		#	and go forward two args
 		elif arg[0] == '-':
 			key = arg[1:]
+			# check that there's a value, and complain if not
+			assert len(sysargs) > 1, f"flag {arg} needs a value"
 			value = sysargs[1]
 			args[key] = value
 			sysargs = sysargs[2:]
@@ -362,8 +364,11 @@ def parse_args(sysargs):
 
 
 # clear screen (without clearing scrollback buffer)
-def clear_screen():
-	os.system('clear -x')
+def clear_screen(clear_buffer=True):
+	if clear_buffer:
+		os.system('clear')
+	else:
+		os.system('clear -x')
 
 
 ############################################################################

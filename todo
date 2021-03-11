@@ -4,13 +4,14 @@ import os
 import sys
 import pickle
 import readline
+import shlex
 
 from tasker import *
 
 # location of data directory
 data_dir = os.path.expanduser('~/Documents/todo/pickle_jar/')
 
-# locations within todo directory
+# locations within data directory
 save_filepath = data_dir+'todo.pickle'
 backup_filepath = data_dir+'backup.pickle'
 
@@ -101,14 +102,13 @@ universal arguments, can be passed with any command
 
 	-verbose			re-throws errors that are normally handled by
 						a chiding print statement
-	
-	-quiet				does not clear screen and re-print todo list
-						
 """
 
 # to print if save filepath is rejected
 save_filepath_help = 'You can edit this script to change save_filepath to the desired location.'
 
+# to print along with error messages
+error_help = "To check usage, use 'help'."
 
 ############################################################################
 #
@@ -156,39 +156,17 @@ Two main classes:
 ############################################################################
 
 
-# read command
-if len(sys.argv) > 1:
-	command = sys.argv[1]
-# if no command, exit
-else:
-	#print(help_text)
-	sys.exit()
-
-
-# read arguments into a dict
-try:
-	args = parse_args(sys.argv[2:])
-# may incur IndexError if command line arguments are incorrect
-except IndexError as error:
-	print('Error while parsing arguments. To check usage, run "todo -help".')
-	sys.exit()
-
-# check for universal flags and remove them from args
-if 'verbose' in args and args['verbose']:
+# check for verbose flag on startup
+if '-verbose' in sys.argv:
 	verbose = True
-	del args['verbose']
 else:
 	verbose = False
-if 'quiet' in args and args['quiet']:
-	quiet = True
-	del args['quiet']
-else:
-	quiet = False
 
-# if help flag is set to True, print help and exit
-if 'help' in args and args['help']:
-	print(help_text)
-	sys.exit()
+
+# input prompt with formatting
+blue	= "\033[38;2;235;206;135m"
+reg		= "\033[0m"
+prompt	= f"{blue}todo: >  {reg}"
 
 
 # read to-do list from file
@@ -203,69 +181,117 @@ except AssertionError as error:
 		raise error
 	sys.exit()
 
-# string describing changes made
-description = False
 
-# execute command
-try:
-	if command == 'add': description = todo_list.add(**args)
-	elif command in ['rm','remove','forget','finish','fin']:
-		description = todo_list.remove(**args)
-	elif command == 'move': description = todo_list.move(**args)
-	elif command in ['rename','edit']:
-		description = todo_list.rename(**args)
-	elif command == 'fold': description = todo_list.fold(**args)
-	elif command == 'unfold': description = todo_list.unfold(**args)
-	elif command == 'focus': description = todo_list.set_focus(**args)
-	elif command == 'unfocus': description = todo_list.unset_focus(**args)
-	elif command == 'open': description = todo_list.open_task(**args)
-	elif command == 'close': description = todo_list.close_task(**args)
-	elif command == 'update': description = todo_list.update_IDs()
-	elif command == 'format': description = todo_list.format_task(**args)
-	elif command == 'full_upgrade': description = todo_list.full_upgrade()
-	# special commands that don't fall through to save and print
-	elif command == 'backup':
-		save_tasks(todo_list, backup_filepath)
-		print('backed up.')
+# clear screen and print
+clear_screen()
+print(todo_list.ls())
+print()
+
+
+# enter editor loop
+while True:
+
+	# read a line of input and split shell-style into a list
+	line = shlex.split(input(prompt))
+
+	# if no input, go again
+	if not line:
+		continue
+
+	# read command and arguments
+	command = line[0]
+	try:
+		args = parse_args(line[1:])
+	# may throw AssertionError if unhappy, complain and continue
+	except AssertionError as error:
+		print(error.args[0])
+		if verbose:
+			raise error
+
+		continue
+
+	# handle special commands
+	if command == 'exit':
 		sys.exit()
-	elif command == 'list':
-		# clear screen and list without saving
-		clear_screen()
-		print(todo_list.ls(**args))
-		sys.exit()
-	elif command == 'undo':
-		undo_list = undo(save_filepath, undo_filepaths)
-		if undo_list and not quiet:
-			clear_screen()
-			print(undo_list.ls())
-		sys.exit()
+	elif command == 'help':
+		print(help_text)
+		continue
+
+	# handle special flags
+	if 'verbose' in args and args['verbose']:
+		verbose = True
+		del args['verbose']
 	else:
-		print('command "'+command+'" not recognized. To check usage, run "todo -help".')
-		sys.exit()
-	
-	if not quiet:
-		# clear screen and print
-		clear_screen()
-		print(todo_list.ls())
+		verbose = False
+
+
+	# string describing changes made
+	description = False
+
+	# execute command
+	try:
+		if command == 'add': description = todo_list.add(**args)
+		elif command in ['rm','remove','forget','finish','fin']:
+			description = todo_list.remove(**args)
+		elif command == 'move': description = todo_list.move(**args)
+		elif command in ['rename','edit']:
+			description = todo_list.rename(**args)
+		elif command == 'fold': description = todo_list.fold(**args)
+		elif command == 'unfold': description = todo_list.unfold(**args)
+		elif command == 'focus': description = todo_list.set_focus(**args)
+		elif command == 'unfocus': description = todo_list.unset_focus(**args)
+		elif command == 'open': description = todo_list.open_task(**args)
+		elif command == 'close': description = todo_list.close_task(**args)
+		elif command == 'update': description = todo_list.update_IDs()
+		elif command == 'format': description = todo_list.format_task(**args)
+		elif command == 'full_upgrade': description = todo_list.full_upgrade()
+		# special commands that don't fall through to save and print
+		elif command == 'backup':
+			save_tasks(todo_list, backup_filepath)
+			print('backed up.')
+			continue
+		elif command == 'list':
+			# clear screen and list without saving
+			clear_screen()
+			print(todo_list.ls(**args))
+			print()
+			continue
+		elif command == 'undo':
+			undo_list = undo(save_filepath, undo_filepaths)
+			if undo_list:
+				todo_list = undo_list
+				clear_screen()
+				print(todo_list.ls())
+				print()
+			continue
+		else:
+			print("command '"+command+"' not recognized.")
+			print(error_help)
+			continue
+	# some methods throw AssertionError if they're unhappy
+	except AssertionError as error:
+		print(error.args[0])
+		print(error_help)
+		if verbose:
+			raise error
+	# may incur TypeError if arguments are incorrect
+	except TypeError as error:
+		print("Error passing arguments to '"+command+"'.")
+		print(error_help)
+		if verbose:
+			raise error
+
+
+	# clear screen and print
+	clear_screen()
+	print(todo_list.ls())
+	print()
+
 	# print description if there's anything to say
 	if description:
-		# if we just printed the todo list, add a newline, if not then not
-		if not quiet:
-			print()
 		print(description.strip())
+	
+	# save todo list
 	save_tasks(todo_list, save_filepath, undo_filepaths)
-
-# some methods throw AssertionError if they're unhappy
-except AssertionError as error:
-	print(error.args[0])
-	if verbose:
-		raise error
-# may incur TypeError if arguments are incorrect
-except TypeError as error:
-	print('Error passing arguments to "'+command+'". To check usage, run "todo -help".')
-	# if verbose is set to True, raise original error message
-	if verbose:
-		raise error
-
 
 
