@@ -168,7 +168,7 @@ else:
 
 
 # input prompt with formatting
-blue	= "\033[38;2;235;206;135m"
+blue	= "\033[38;2;135;206;235m"
 reg		= "\033[0m"
 prompt	= f"{blue}todo: >  {reg}"
 
