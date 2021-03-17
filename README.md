@@ -10,7 +10,10 @@
 
 ### Usage
 
-`todo` from the command line opens to-do list in a basic editor. From there, commands are given as `<command> <args>` as described below.
+`todo <command> <args>` --- manage to-do list from command line
+
+`todo` --- if no command is given, opens to-do list in a basic editor, from which commands are given as `<command> <args>`.
+
 
 ##### Commands and arguments:
 
@@ -67,6 +70,8 @@ universal arguments, can be passed with any command
 
     -verbose            re-throws errors that are normally handled by
                         a chiding print statement
+	
+	-quiet				doesn't clear screen and print to-do list
 
 ### (My) Setup
 
