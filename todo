@@ -317,7 +317,7 @@ if len(sys.argv) > 1:
 	try:
 		execute(todo_list, line, clear_buffer=False)
 	except Exception as error:
-		print(error.args[0])
+		print(f"{type(error).__name__}: {error}")
 		if verbose:
 			raise error
 		
@@ -333,13 +333,13 @@ print()
 
 while True:
 
-	# read a line of input and split shell-style into a list
-	line = shlex.split(input(prompt))
-
 	try:
+		# read a line of input and split shell-style into a list
+		line = shlex.split(input(prompt))
+
 		execute(todo_list, line)
 	except Exception as error:
-		print(error.args[0])
+		print(f"{type(error).__name__}: {error}")
 		if verbose:
 			raise error
 
