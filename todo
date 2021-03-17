@@ -160,66 +160,34 @@ Two main classes:
 ############################################################################
 
 
-# check for verbose flag on startup
-if '-verbose' in sys.argv:
-	verbose = True
-else:
-	verbose = False
+#
+#	big ol' function to wrap execution of a command
+#
 
-
-# input prompt with formatting
-blue	= "\033[38;2;135;206;235m"
-reg		= "\033[0m"
-prompt	= f"{blue}todo: >  {reg}"
-
-
-# read to-do list from file
-try:
-	todo_list = load_tasks(save_filepath)
-# will incur AssertionError if file doesn't exist
-#	and user declines to create it
-except AssertionError as error:
-	print(save_filepath_help)
-	# if verbose is set to True, raise original error
-	if verbose:
-		raise error
-	sys.exit()
-
-
-# clear screen and print
-clear_screen()
-print(todo_list.ls())
-print()
-
-
-# enter editor loop
-while True:
-
-	# read a line of input and split shell-style into a list
-	line = shlex.split(input(prompt))
+def execute(todo_list, line=False):
 
 	# if no input, go again
 	if not line:
-		continue
+		return
 
 	# read command and arguments
 	command = line[0]
 	try:
 		args = parse_args(line[1:])
-	# may throw AssertionError if unhappy, complain and continue
+	# may throw AssertionError if unhappy, complain and return
 	except AssertionError as error:
 		print(error.args[0])
 		if verbose:
 			raise error
 
-		continue
+		return
 
 	# handle special commands
 	if command == 'exit':
 		sys.exit()
 	elif command == 'help':
 		print(help_text)
-		continue
+		return
 
 	# handle special flags
 	if 'verbose' in args and args['verbose']:
@@ -253,13 +221,13 @@ while True:
 		elif command == 'backup':
 			save_tasks(todo_list, backup_filepath)
 			print('backed up.')
-			continue
+			return
 		elif command == 'list':
 			# clear screen and list without saving
 			clear_screen()
 			print(todo_list.ls(**args))
 			print()
-			continue
+			return
 		elif command == 'undo':
 			undo_list = undo(save_filepath, undo_filepaths)
 			if undo_list:
@@ -267,11 +235,11 @@ while True:
 				clear_screen()
 				print(todo_list.ls())
 				print()
-			continue
+			return
 		else:
 			print("command '"+command+"' not recognized.")
 			print(error_help)
-			continue
+			return
 	# some methods throw AssertionError if they're unhappy
 	except AssertionError as error:
 		print(error.args[0])
@@ -297,5 +265,57 @@ while True:
 	
 	# save todo list
 	save_tasks(todo_list, save_filepath, undo_filepaths)
+
+#
+#	end of execute function
+#
+#	beginning of active code
+#
+
+
+# check for verbose flag on startup
+if '-verbose' in sys.argv:
+	verbose = True
+else:
+	verbose = False
+
+
+# set input prompt with formatting
+blue	= "\033[38;2;135;206;235m"
+reg		= "\033[0m"
+prompt	= f"{blue}todo: >  {reg}"
+
+
+# read to-do list from file
+try:
+	todo_list = load_tasks(save_filepath)
+# will incur AssertionError if file doesn't exist
+#	and user declines to create it
+except AssertionError as error:
+	print(save_filepath_help)
+	# if verbose is set to True, raise original error
+	if verbose:
+		raise error
+	sys.exit()
+
+
+# clear screen and print
+clear_screen()
+print(todo_list.ls())
+print()
+
+
+# enter editor loop
+while True:
+
+	# read a line of input and split shell-style into a list
+	line = shlex.split(input(prompt))
+
+	try:
+		execute(todo_list, line)
+	except Exception as error:
+		print(error.args[0])
+		if verbose:
+			raise error
 
 
