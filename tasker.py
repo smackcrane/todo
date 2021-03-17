@@ -124,7 +124,11 @@ def chomp(line):
 def justify(text, width=None):
 	# if width was not passed, get it dynamically
 	if not width:
-		width = os.get_terminal_size().columns
+		try:
+			width = os.get_terminal_size().columns
+		except OSError:
+			# if no width supplied and can't detect it, jus' choose smth
+			width = 76
 
 	out = ''
 	lines = text.splitlines()
