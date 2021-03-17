@@ -164,7 +164,7 @@ Two main classes:
 #	big ol' function to wrap execution of a command
 #
 
-def execute(todo_list, line=False):
+def execute(todo_list, line=False, clear_buffer=True):
 
 	# if no input, go again
 	if not line:
@@ -195,6 +195,11 @@ def execute(todo_list, line=False):
 		del args['verbose']
 	else:
 		verbose = False
+	if 'quiet' in args and args['quiet']:
+		quiet = True
+		del args['quiet']
+	else:
+		quiet = False
 
 
 	# string describing changes made
@@ -224,7 +229,7 @@ def execute(todo_list, line=False):
 			return
 		elif command == 'list':
 			# clear screen and list without saving
-			clear_screen()
+			clear_screen(clear_buffer=clear_buffer)
 			print(todo_list.ls(**args))
 			print()
 			return
@@ -232,9 +237,10 @@ def execute(todo_list, line=False):
 			undo_list = undo(save_filepath, undo_filepaths)
 			if undo_list:
 				todo_list = undo_list
-				clear_screen()
-				print(todo_list.ls())
-				print()
+				if not quiet:
+					clear_screen(clear_buffer=clear_buffer)
+					print(todo_list.ls())
+					print()
 			return
 		else:
 			print("command '"+command+"' not recognized.")
@@ -255,9 +261,10 @@ def execute(todo_list, line=False):
 
 
 	# clear screen and print
-	clear_screen()
-	print(todo_list.ls())
-	print()
+	if not quiet:
+		clear_screen(clear_buffer=clear_buffer)
+		print(todo_list.ls())
+		print()
 
 	# print description if there's anything to say
 	if description:
@@ -276,6 +283,7 @@ def execute(todo_list, line=False):
 # check for verbose flag on startup
 if '-verbose' in sys.argv:
 	verbose = True
+	sys.argv.remove('-verbose')
 else:
 	verbose = False
 
@@ -299,13 +307,30 @@ except AssertionError as error:
 	sys.exit()
 
 
-# clear screen and print
+# if we got command line arguments (besides -verbose), execute them and exit
+#	in this case also don't clear the scrollback buffer
+if len(sys.argv) > 1:
+	
+	# cut off the name of the script
+	line = sys.argv[1:]
+
+	try:
+		execute(todo_list, line, clear_buffer=False)
+	except Exception as error:
+		print(error.args[0])
+		if verbose:
+			raise error
+		
+	sys.exit()
+
+
+# if no command line arguments,
+#	clear screen, print, and enter editor loop
+
 clear_screen()
 print(todo_list.ls())
 print()
 
-
-# enter editor loop
 while True:
 
 	# read a line of input and split shell-style into a list
