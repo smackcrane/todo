@@ -343,14 +343,14 @@ class task:
 	
 	# recursively produce a pretty list of self and subtasks
 	# returns it as a string
-	def ls(self):
+	def ls(self, autofold=False):
 		out = ''	# output to build up
 
 		# add self
 		out += self.format+self.ID_str+' '+self.name+'\033[0m\n'
 		
 		# if folded, end here
-		if self.folded:
+		if self.folded or autofold:
 			# add indication of hidden subtasks if there are any
 			if self.subtasks:
 				out += '\u2514\u2500 ...\n'
@@ -490,7 +490,7 @@ class task_list:
 		else:
 			t.name = name
 
-		return 'renamed:\n'+justify(t.ls())
+		return 'renamed:\n'+justify(t.ls(autofold=True))
 
 	# move task
 	# returns string describing moved task
@@ -541,7 +541,7 @@ class task_list:
 		# update IDs
 		self.update_IDs()
 
-		return 'moved:\n'+justify(t.ls())
+		return 'moved:\n'+justify(t.ls(autofold=True))
 
 	# fold task
 	# no return value
