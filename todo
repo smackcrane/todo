@@ -160,15 +160,37 @@ Two main classes:
 ############################################################################
 
 
+# check for verbose flag on startup
+if '-verbose' in sys.argv:
+	verbose = True
+	sys.argv.remove('-verbose')
+else:
+	verbose = False
+
+
 #
 #	big ol' function to wrap execution of a command
 #
 
 def execute(todo_list, line=False, clear_buffer=True):
 
+	global verbose
+
 	# if no input, go again
 	if not line:
 		return
+
+	# handle special flags
+	if '-verbose' in line:
+		verbose = True
+		line.remove('-verbose')
+	else:
+		verbose = False
+	if '-quiet' in line:
+		quiet = True
+		line.remove('-quiet')
+	else:
+		quiet = False
 
 	# read command and arguments
 	command = line[0]
@@ -187,18 +209,6 @@ def execute(todo_list, line=False, clear_buffer=True):
 	elif command == 'help':
 		print(help_text)
 		return
-
-	# handle special flags
-	if 'verbose' in args and args['verbose']:
-		verbose = True
-		del args['verbose']
-	else:
-		verbose = False
-	if 'quiet' in args and args['quiet']:
-		quiet = True
-		del args['quiet']
-	else:
-		quiet = False
 
 
 	# string describing changes made
@@ -278,14 +288,6 @@ def execute(todo_list, line=False, clear_buffer=True):
 #
 #	beginning of active code
 #
-
-
-# check for verbose flag on startup
-if '-verbose' in sys.argv:
-	verbose = True
-	sys.argv.remove('-verbose')
-else:
-	verbose = False
 
 
 # set input prompt with formatting

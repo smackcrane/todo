@@ -269,6 +269,7 @@ def parse_args(sysargs):
 
 		# if it's a standalone flag, set that flag
 		#	 and go forward one arg
+		#		(note, in current setup we expect some to never appear)
 		if arg in ['-verbose','-quiet','-add','-all','-top','-help']:
 			args[arg[1:]] = True
 			sysargs = sysargs[1:]
