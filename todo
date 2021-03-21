@@ -179,7 +179,6 @@ def execute(todo_list, line=False, clear_buffer=True):
 		print(error.args[0])
 		if verbose:
 			raise error
-
 		return
 
 	# handle special commands
@@ -252,13 +251,14 @@ def execute(todo_list, line=False, clear_buffer=True):
 		print(error_help)
 		if verbose:
 			raise error
+		return
 	# may incur TypeError if arguments are incorrect
 	except TypeError as error:
 		print("Error passing arguments to '"+command+"'.")
 		print(error_help)
 		if verbose:
 			raise error
-
+		return
 
 	# clear screen and print
 	if not quiet:
