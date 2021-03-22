@@ -177,33 +177,8 @@ def justify(text, width=None):
 
 
 # save to-do list
-def save_tasks(todo_list, save_file, undo_files=[]):
+def save_tasks(todo_list, save_file):
 
-	# if undo files specified, update them
-	if undo_files:
-
-		# working backwwards from the second-to-last
-		for i in reversed(range(len(undo_files)-1)):
-
-			# try, in case some files haven't been created yet
-			try:
-				# load saved state and dump into next undo file
-				with open(undo_files[i], 'rb') as f:
-					temp = pickle.load(f)
-				with open(undo_files[i+1], 'wb') as f:
-					pickle.dump(temp, f)
-			except FileNotFoundError as error:
-				# if not found, no worries, this function should create
-				#	another each time it runs so it'll get made soon
-				continue
-
-		# then dump save file into first undo
-		with open(save_file, 'rb') as f:
-			temp = pickle.load(f)
-		with open(undo_files[0], 'wb') as f:
-			pickle.dump(temp, f)
-
-	# save state in save file
 	with open(save_file, 'wb') as f:
 		pickle.dump(todo_list, f)
 
@@ -224,34 +199,6 @@ def load_tasks(path):
 		with open(path, 'xb') as f:
 			pickle.dump(todo_list, f)
 
-	return todo_list
-
-
-# undo, i.e. rearrange save file and undo files
-# returns the new current to-do list, or False if failed
-def undo(save_file, undo_files):
-	try:
-		# restore the first undo file to the save file
-		with open(undo_files[0], 'rb') as f:
-			todo_list = pickle.load(f)
-		with open(save_file, 'wb') as f:
-			pickle.dump(todo_list, f)
-	# if undo file not found, complain
-	except FileNotFoundError as error:
-		print('No undo file found at '+undo_files[0])
-		return False
-	
-	# shift up all the rest of the undo files
-	for i in range(1,len(undo_files)):
-		try:
-			with open(undo_files[i], 'rb') as f:
-				temp = pickle.load(f)
-			with open(undo_files[i-1], 'wb') as f:
-				pickle.dump(temp, f)
-		except FileNotFoundError as error:
-			# if file not found, it's probably not created yet, no probs
-			pass
-	
 	return todo_list
 
 
@@ -376,6 +323,8 @@ class task_list:
 	def __init__(self):
 		self.root = task(name='root')
 		self.focus = []
+		self.undo_states = []
+		self.max_undo_depth = 10
 
 	# find and return task for given ID list
 	def grab_task(self, ID_list):
@@ -389,6 +338,10 @@ class task_list:
 		# check if attributes exist, and if not create them
 		try: self.focus
 		except AttributeError: self.focus = []
+		try: self.undo_states
+		except AttributeError: self.undo_states = []
+		try: self.max_undo_depth
+		except AttributeError: self.max_undo_depth = 10
 
 		# send it down to the task tree
 		self.root.full_upgrade()
@@ -537,7 +490,7 @@ class task_list:
 			t = p.subtasks.pop(index)
 			p.subtasks.insert(new_index, t)
 		else:
-			assert False, '"move" needs an argument. To check usage, run "todo -help".'
+			assert False, "'move' needs an argument."
 		
 		# update IDs
 		self.update_IDs()
@@ -635,5 +588,21 @@ class task_list:
 		assert form in self.formats, 'format "'+form+'" not recognized\nknown formats: '+' '.join(self.formats.keys())
 
 		self.grab_task(ID_list).format = self.formats[form]
+
+	# undo last command
+	# no return value
+	def undo(self):
+		# make sure there's a state to restore
+		assert self.undo_states, "no undo state found"
+		
+		self.root = self.undo_states.pop(0)
+
+	# save last root to undo states
+	# no return value
+	def save_last_root(self, last_root):
+		self.undo_states.insert(0,last_root)
+		while len(self.undo_states) > self.max_undo_depth:
+			self.undo_states.pop()
+
 
 

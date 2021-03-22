@@ -5,6 +5,7 @@ import sys
 import pickle
 import readline
 import shlex
+import copy
 
 from tasker import *
 
@@ -15,9 +16,6 @@ data_dir = os.path.expanduser('~/Documents/todo/pickle_jar/')
 save_filepath = data_dir+'todo.pickle'
 backup_filepath = data_dir+'backup.pickle'
 
-# allow a few undo's by saving state in these files
-undo_number = 5
-undo_filepaths = [data_dir+'undo'+str(i)+'.pickle' for i in range(undo_number)]
 
 ############################################################################
 #
@@ -97,6 +95,10 @@ commands and arguments:
 
 	format <id> <str>	format a task with format <str>
 						to see known formats, try it and the error will say
+
+	undo				undo the last relevant command
+						e.g. add/rm/move/etc but not focus/unfocus/open/etc
+						by default, last 10 states saved
 	
 	full_upgrade		upgrade from a previous version (rarely needed)
 
@@ -150,6 +152,8 @@ Two main classes:
 		(just a couple functions that are defined recursively)
 	class task_list accepts commands and manipulates tasks
 		holds a root task which is the root of the task tree
+
+Convention: commands should fail by throwing an error, rather than returning
 """
 
 
@@ -210,6 +214,10 @@ def execute(todo_list, line=False, clear_buffer=True):
 		print(help_text)
 		return
 
+	# copy current state to save for undo purposes
+	last_root = copy.deepcopy(todo_list.root)
+	# also set a flag to track whether we want to save this state
+	save_last_root = True
 
 	# string describing changes made
 	description = False
@@ -222,15 +230,28 @@ def execute(todo_list, line=False, clear_buffer=True):
 		elif command == 'move': description = todo_list.move(**args)
 		elif command in ['rename','edit']:
 			description = todo_list.rename(**args)
+		elif command == 'format': description = todo_list.format_task(**args)
 		elif command == 'fold': description = todo_list.fold(**args)
 		elif command == 'unfold': description = todo_list.unfold(**args)
-		elif command == 'focus': description = todo_list.set_focus(**args)
-		elif command == 'unfocus': description = todo_list.unset_focus(**args)
-		elif command == 'open': description = todo_list.open_task(**args)
-		elif command == 'close': description = todo_list.close_task(**args)
 		elif command == 'update': description = todo_list.update_IDs()
-		elif command == 'format': description = todo_list.format_task(**args)
-		elif command == 'full_upgrade': description = todo_list.full_upgrade()
+		elif command == 'focus':
+			save_last_root = False
+			description = todo_list.set_focus(**args)
+		elif command == 'unfocus':
+			save_last_root = False
+			description = todo_list.unset_focus(**args)
+		elif command == 'open':
+			save_last_root = False
+			description = todo_list.open_task(**args)
+		elif command == 'close':
+			save_last_root = False
+			description = todo_list.close_task(**args)
+		elif command == 'undo':
+			save_last_root = False
+			description = todo_list.undo(**args)
+		elif command == 'full_upgrade':
+			save_last_root = False
+			description = todo_list.full_upgrade()
 		# special commands that don't fall through to save and print
 		elif command == 'backup':
 			save_tasks(todo_list, backup_filepath)
@@ -242,19 +263,8 @@ def execute(todo_list, line=False, clear_buffer=True):
 			print(todo_list.ls(**args))
 			print()
 			return
-		elif command == 'undo':
-			undo_list = undo(save_filepath, undo_filepaths)
-			if undo_list:
-				todo_list = undo_list
-				if not quiet:
-					clear_screen(clear_buffer=clear_buffer)
-					print(todo_list.ls())
-					print()
-			return
 		else:
-			print("command '"+command+"' not recognized.")
-			print(error_help)
-			return
+			assert False, "command '"+command+"' not recognized."
 	# some methods throw AssertionError if they're unhappy
 	except AssertionError as error:
 		print(error.args[0])
@@ -270,6 +280,11 @@ def execute(todo_list, line=False, clear_buffer=True):
 			raise error
 		return
 
+	# update undo states
+	# at this point in the code, we should know the command succeeded
+	if save_last_root:
+		todo_list.save_last_root(last_root)
+
 	# clear screen and print
 	if not quiet:
 		clear_screen(clear_buffer=clear_buffer)
@@ -281,7 +296,7 @@ def execute(todo_list, line=False, clear_buffer=True):
 		print(description.strip())
 	
 	# save todo list
-	save_tasks(todo_list, save_filepath, undo_filepaths)
+	save_tasks(todo_list, save_filepath)
 
 #
 #	end of execute function
