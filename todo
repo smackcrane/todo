@@ -257,7 +257,7 @@ def execute(todo_list, line=False, clear_buffer=True):
 			save_tasks(todo_list, backup_filepath)
 			print('backed up.')
 			return
-		elif command == 'list':
+		elif command in ['list','l']:
 			# clear screen and list without saving
 			clear_screen(clear_buffer=clear_buffer)
 			print(todo_list.ls(**args))
