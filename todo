@@ -306,8 +306,10 @@ def execute(todo_list, line=False, clear_buffer=True):
 
 
 # set input prompt with formatting
-blue	= "\033[38;2;135;206;235m"
-reg		= "\033[0m"
+#	use ANSI escape sequences for color
+#	enclose in \001 ... \002 to tell readline the characters are invisible
+blue	= "\001\033[38;2;135;206;235m\002"
+reg		= "\001\033[0m\002"
 prompt	= f"{blue}todo: >  {reg}"
 
 
