@@ -171,6 +171,13 @@ if '-verbose' in sys.argv:
 else:
 	verbose = False
 
+# check for description flag on startup
+if '-noshow' in sys.argv:
+	show_description = False
+	sys.argv.remove('-noshow')
+else:
+	show_description = True
+
 
 #
 #	big ol' function to wrap execution of a command
@@ -292,7 +299,7 @@ def execute(todo_list, line=False, clear_buffer=True):
 		print()
 
 	# print description if there's anything to say
-	if description:
+	if description and show_description:
 		print(description.strip())
 	
 	# save todo list
