@@ -3,6 +3,7 @@ import os
 import sys
 import pickle
 import readline
+from copy import deepcopy
 
 
 ############################################################################
@@ -320,11 +321,14 @@ class task:
 
 
 class task_list:
-	def __init__(self):
-		self.root = task(name='root')
-		self.focus = []
-		self.undo_states = []
-		self.max_undo_depth = 10
+	def __init__(self, root=None, focus=[], focus_past=[],
+									undo_states=[], max_undo_depth=10):
+		if root == None: self.root = task(name='root')
+		else:	self.root = root
+		self.focus = focus
+		self.focus_past = focus_past
+		self.undo_states = undo_states
+		self.max_undo_depth = max_undo_depth
 
 	# find and return task for given ID list
 	def grab_task(self, ID_list):
@@ -338,6 +342,8 @@ class task_list:
 		# check if attributes exist, and if not create them
 		try: self.focus
 		except AttributeError: self.focus = []
+		try: self.focus_past
+		except AttributeError: self.focus_past = []
 		try: self.undo_states
 		except AttributeError: self.undo_states = []
 		try: self.max_undo_depth
@@ -374,6 +380,7 @@ class task_list:
 	# add a new task
 	# returns string describing addition
 	def add(self, main, sub=None, top=False):
+		self.save_undo_state()
 		# arg 'main' is name / description of task
 		name = main
 		# convert parent ID 'sub' to list form, or use focus if no parent
@@ -399,6 +406,7 @@ class task_list:
 	# remove a task
 	# returns string describing removal
 	def remove(self, main):
+		self.save_undo_state()
 		# arg 'main' is ID string(s) of task(s) to remove
 		ID_lists = IDs_to_lists(main)
 		# sort lists backwards so removing doesn't change upcoming IDs
@@ -424,6 +432,7 @@ class task_list:
 	# rename task
 	# returns a string describing new name
 	def rename(self, main, add=False):
+		self.save_undo_state()
 		# arg 'main' is string with ID and optionally new name
 		ID_list, name = parse_ID_name(main)
 
@@ -451,6 +460,7 @@ class task_list:
 	# throws AssertionError if unhappy
 	def move(self, main, into='',
 					to='', upto='', upby='', downto='', downby=''):
+		self.save_undo_state()
 		# arg 'main' is ID string of task to move
 		ID_list = ID_to_list(main)
 		# pop index, leaving parent in ID_list
@@ -500,6 +510,7 @@ class task_list:
 	# fold task
 	# no return value
 	def fold(self, main='', all=False):
+		self.save_undo_state()
 		# if 'all' is passed, fold all top-level tasks
 		# I cringe at using a built-in name for a kwarg, but
 		#	I really want to call it 'all' from the outside
@@ -520,6 +531,7 @@ class task_list:
 	# unfold task
 	# no return value
 	def unfold(self, main='', all=False):
+		self.save_undo_state()
 		# if 'all' is passed, unfold all top-level tasks
 		if all:
 			# get list of top-level subtasks and convert to list of IDs
@@ -537,30 +549,39 @@ class task_list:
 	# set focus
 	# no return value
 	def set_focus(self, main):
+		self.save_undo_state()
+    # if there's a focus, remember it
+		if self.focus:
+			self.focus_past.append(self.focus)
+
 		# arg 'main' is ID string of task to focus on
 		self.focus = ID_to_list(main)
 
 	# un-set focus
 	# no return value
 	def unset_focus(self):
-		self.focus = []
+		self.save_undo_state()
+		# if there's a past focus, return to it; otherwise remove focus
+		if self.focus_past:
+			self.focus = self.focus_past.pop()
+		else:
+			self.focus = []
 
 	# open, i.e. unfold and focus
 	# no return value
 	def open_task(self, main):
-		# arg 'main' is ID string of task to open
-		ID_list = ID_to_list(main)
-		t = self.grab_task(ID_list)
-
+		self.save_undo_state()
 		# unfold and focus
-		t.folded = False
-		self.focus = ID_list
+		self.unfold(main)
+		self.set_focus(main)
 
 	# close, i.e. fold and unfocus
 	# no return value
 	def close_task(self):
-		self.grab_task(self.focus).folded = True
-		self.focus = []
+		self.save_undo_state()
+		# fold and unfocus
+		self.fold(ID_to_str(self.focus))
+		self.unset_focus()
 
 	formats =	{ 
 				'none'		: '\033[0m',
@@ -582,6 +603,7 @@ class task_list:
 	# format task
 	# no return value
 	def format_task(self, main):
+		self.save_undo_state()
 		# arg 'main' is ID strig of task and key string for format dict
 		ID_list, form = parse_ID_name(main)
 
@@ -595,14 +617,23 @@ class task_list:
 		# make sure there's a state to restore
 		assert self.undo_states, "no undo state found"
 		
-		self.root = self.undo_states.pop(0)
+		state = self.undo_states.pop()
+		self.root = state['root']
+		self.focus = state['focus']
+		self.focus_past = state['focus_past']
 
-	# save last root to undo states
-	# no return value
-	def save_last_root(self, last_root):
-		self.undo_states.insert(0,last_root)
+	# save an undo state
+	def save_undo_state(self):
+		# record state in a dict
+		state = {
+				'root': deepcopy(self.root),
+				'focus': deepcopy(self.focus),
+				'focus_past': deepcopy(self.focus_past)}
+		# add to undo states
+		self.undo_states.append(state)
+		# pop down to max_undo_depth
 		while len(self.undo_states) > self.max_undo_depth:
-			self.undo_states.pop()
+			self.undo_states.pop(0)
 
 
 

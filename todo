@@ -221,11 +221,6 @@ def execute(todo_list, line=False, clear_buffer=True):
 		print(help_text)
 		return
 
-	# copy current state to save for undo purposes
-	last_root = copy.deepcopy(todo_list.root)
-	# also set a flag to track whether we want to save this state
-	save_last_root = True
-
 	# string describing changes made
 	description = False
 
@@ -241,24 +236,12 @@ def execute(todo_list, line=False, clear_buffer=True):
 		elif command == 'fold': description = todo_list.fold(**args)
 		elif command == 'unfold': description = todo_list.unfold(**args)
 		elif command == 'update': description = todo_list.update_IDs()
-		elif command == 'focus':
-			save_last_root = False
-			description = todo_list.set_focus(**args)
-		elif command == 'unfocus':
-			save_last_root = False
-			description = todo_list.unset_focus(**args)
-		elif command == 'open':
-			save_last_root = False
-			description = todo_list.open_task(**args)
-		elif command == 'close':
-			save_last_root = False
-			description = todo_list.close_task(**args)
-		elif command == 'undo':
-			save_last_root = False
-			description = todo_list.undo(**args)
-		elif command == 'full_upgrade':
-			save_last_root = False
-			description = todo_list.full_upgrade()
+		elif command == 'focus': description = todo_list.set_focus(**args)
+		elif command == 'unfocus': description = todo_list.unset_focus(**args)
+		elif command == 'open': description = todo_list.open_task(**args)
+		elif command == 'close': description = todo_list.close_task(**args)
+		elif command == 'undo': description = todo_list.undo(**args)
+		elif command == 'full_upgrade': description = todo_list.full_upgrade()
 		# special commands that don't fall through to save and print
 		elif command == 'backup':
 			save_tasks(todo_list, backup_filepath)
@@ -286,11 +269,6 @@ def execute(todo_list, line=False, clear_buffer=True):
 		if verbose:
 			raise error
 		return
-
-	# update undo states
-	# at this point in the code, we should know the command succeeded
-	if save_last_root:
-		todo_list.save_last_root(last_root)
 
 	# clear screen and print
 	if not quiet:
