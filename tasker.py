@@ -218,7 +218,7 @@ def parse_args(sysargs):
     # if it's a standalone flag, set that flag
     #	 and go forward one arg
     #		(note, in current setup we expect some to never appear)
-    if arg in ['-verbose','-quiet','-add','-all','-top','-help']:
+    if arg in ['-verbose','-quiet','-add','-all','-rall','-top','-help']:
       args[arg[1:]] = True
       sysargs = sysargs[1:]
 
@@ -318,6 +318,12 @@ class task:
         out += '\n'
 
     return out
+
+  # recursively unfold all tasks at all levels
+  def recursively_unfold(self):
+    self.folded = False
+    for t in self.subtasks:
+      t.recursively_unfold()
 
 
 class task_list:
@@ -530,8 +536,13 @@ class task_list:
 
   # unfold task
   # no return value
-  def unfold(self, main='', all=False):
+  def unfold(self, main='', all=False, rall=False):
     self.save_undo_state()
+    # if 'rall' is passed, unfold *all* tasks ('r'ecursively)
+    if rall:
+      self.root.recursively_unfold()
+      return
+
     # if 'all' is passed, unfold all top-level tasks
     if all:
       # get list of top-level subtasks and convert to list of IDs
