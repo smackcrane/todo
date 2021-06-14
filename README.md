@@ -51,6 +51,7 @@
 
     unfold <id>           unfold a task
       [-all]                unfold all top-level tasks
+      [-rall]               unfold all tasks (recursive all)
 
     focus <id>            focus on specified task; equivalent to always
                           including '-sub <id>' in commands that accept it
