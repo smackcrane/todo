@@ -6,6 +6,7 @@ import pickle
 import readline
 import shlex
 import copy
+import pandas as pd
 
 from tasker import *
 
@@ -15,6 +16,9 @@ data_dir = os.path.expanduser('~/Documents/todo/pickle_jar/')
 # locations within data directory
 save_filepath = data_dir+'todo.pickle'
 backup_filepath = data_dir+'backup.pickle'
+
+# location of log file
+log_filepath = data_dir+'task_log.csv'
 
 
 ############################################################################
@@ -228,7 +232,25 @@ def execute(todo_list, line=False, clear_buffer=True):
   try:
     if command == 'add': description = todo_list.add(**args)
     elif command in ['rm','remove','forget','finish','fin']:
-      description = todo_list.remove(**args)
+      description, logs = todo_list.remove(**args)
+      # save data about the task
+      try:
+        data = pd.read_csv(log_filepath)
+      except FileNotFoundError:
+        description += f'\ncreating logfile at {log_filepath}\n'
+        data = {
+            'name'        : [],
+            'ID_str'      : [],
+            'parents'     : [],
+            'start_date'  : [],
+            'end_date'    : [],
+            'command'     : []
+            }
+        data = pd.DataFrame(data)
+      for log in logs:
+        log['command'] = command
+        data = data.append(log, ignore_index=True)
+      data.to_csv(log_filepath, index=False)
     elif command == 'move': description = todo_list.move(**args)
     elif command in ['rename','edit']:
       description = todo_list.rename(**args)

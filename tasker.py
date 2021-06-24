@@ -4,6 +4,8 @@ import sys
 import pickle
 import readline
 from copy import deepcopy
+import datetime
+import json
 
 
 ############################################################################
@@ -269,6 +271,7 @@ class task:
     self.subtasks = []				# list of subtasks
     self.folded = False				# fold flag
     self.format = ''			# formatting for print
+    self.start_date = datetime.date.today().isoformat()
 
   # upgrade from previous versions
   def full_upgrade(self):
@@ -279,6 +282,8 @@ class task:
     except AttributeError: self.folded = False
     try: self.format
     except AttributeError: self.format = '\033[0m'
+    try: self.start_date
+    except AttributeError: self.start_date = ''
 
     # recurse to subtasks
     for sub in self.subtasks:
@@ -325,6 +330,18 @@ class task:
     for t in self.subtasks:
       t.recursively_unfold()
 
+  # produce dict with log information
+  def log(self):
+    end_date = datetime.date.today().isoformat()
+    log = {
+        'name'        : self.name,
+        'ID_str'      : self.ID_str,
+        'start_date'  : self.start_date,
+        'end_date'    : end_date
+        }
+    return log
+
+
 
 class task_list:
   def __init__(self, root=None, focus=[], focus_past=[],
@@ -342,6 +359,15 @@ class task_list:
     for index in ID_list:
       t = t.subtasks[index]
     return t
+
+  # find and return task for given ID list
+  def list_names(self, ID_list):
+    t = self.root
+    s = []
+    for index in ID_list:
+      t = t.subtasks[index]
+      s.append(t.name)
+    return s
 
   # upgrade from previous version
   def full_upgrade(self):
@@ -410,7 +436,8 @@ class task_list:
     return 'added:\n'+justify(new_task.ls())
 
   # remove a task
-  # returns string describing removal
+  # returns string describing removal and
+  # a list of dicts with task data for logging
   def remove(self, main):
     self.save_undo_state()
     # arg 'main' is ID string(s) of task(s) to remove
@@ -420,20 +447,26 @@ class task_list:
     ID_lists.reverse()
 
     out = ''
+    logs = []
     for ID_list in ID_lists:
       # pop index off end of ID_list, leaving parent ID in ID_list
       index = ID_list.pop()
 
       # grab parent and remove subtask
       removed = self.grab_task(ID_list).subtasks.pop(index)
+      # record names of parent tasks
+      parents = self.list_names(ID_list)
 
-      # add removed task to description
+      # add removed task to description and log
       out += 'removed:\n'+justify(removed.ls())+'\n'
+      log = removed.log()
+      log['parents'] = json.dumps(parents)
+      logs.append(log)
 
     # update task IDs
     self.update_IDs()
 
-    return out.strip()
+    return out.strip(), logs
 
   # rename task
   # returns a string describing new name
