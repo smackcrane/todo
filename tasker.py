@@ -628,19 +628,19 @@ class task_list:
     self.unset_focus()
 
   formats =	{ 
-      'none'		  : '\033[0m',
-      'bold'		  : '\033[1m',
-      'italic'	  : '\033[3m',
-      'underline'	: '\033[4m',
-      'bright'	  : '\033[38;2;255;255;255m',
-      'dim'		    : '\033[38;5;240m',
-      'invisible'	: '\033[30m',
-      'red'		    : '\033[31m',
-      'orange'	  : '\033[33m',
-      'yellow'	  : '\033[38;5;220m',
-      'green'		  : '\033[32m',
-      'cyan'		  : '\033[36m',
-      'pink'		  : '\033[35m',
+      'none'        : '\033[0m',
+      'bold'        : '\033[1m',
+      'italic'      : '\033[3m',
+      'underline'   : '\033[4m',
+      'bright'      : '\033[38;2;255;255;255m',
+      'dim'         : '\033[38;5;240m',
+      'invisible'   : '\033[30m',
+      'red'         : '\033[31m',
+      'orange'      : '\033[33m',
+      'yellow'      : '\033[38;5;220m',
+      'green'       : '\033[32m',
+      'cyan'        : '\033[36m',
+      'pink'        : '\033[35m',
       }
 
   # format task
