@@ -301,7 +301,7 @@ class task:
     out = ''	# output to build up
 
     # add self
-    out += self.format+self.ID_str+' '+self.name+'\033[0m\n'
+    out += self.ID_str+' '+self.name+'\n'
 
     # if folded, end here
     if self.folded or autofold:
@@ -678,5 +678,8 @@ class task_list:
     while len(self.undo_states) > self.max_undo_depth:
       self.undo_states.pop(0)
 
+  #TODO handle keypress
+  def keypress(self, k):
+      pass
 
 

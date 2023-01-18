@@ -7,6 +7,9 @@ import readline
 import shlex
 import copy
 import pandas as pd
+import curses
+from TodoWindow import TodoWindow
+from Keys import Keys
 
 from tasker import *
 
@@ -146,7 +149,7 @@ Arguments are read from input() into a dict (see parse_args utility)
   e.g. 'todo add email' results in { 'main' : 'email' } in dict
 Arguments are passed by dict unpacking
   e.g. 'todo add email'
-    -> args = { 'main' : 'email" }
+    -> args = { 'main' : 'email' }
     -> todo_list.add(**args)
   thus class task_list methods generally take an argument 'main', which
     is renamed inside the method to clarify its role
@@ -353,11 +356,7 @@ if len(sys.argv) > 1:
 # if no command line arguments,
 #	clear screen, print, and enter editor loop
 
-clear_screen()
-print(todo_list.ls())
-print()
-
-while True:
+while False:
 
   try:
     # read a line of input and split shell-style into a list
@@ -369,4 +368,22 @@ while True:
     if verbose:
       raise error
 
+def main(screen):
+    screen.refresh()
+    window = TodoWindow(screen, todo_list)
 
+    while True:
+        k = screen.getch()
+
+        #TODO if resize, then resize
+        if k == Keys.RESIZE:
+            continue
+
+        flag = window.keypress(k)
+
+        if flag == 'quit':
+            break
+
+
+if __name__ == '__main__':
+    curses.wrapper(main)
