@@ -22,3 +22,10 @@ def ID_to_list(ID_str):
         return []
     else:
         return [int(i) - 1 for i in ID_str.split('.')]
+
+# box-drawing character replacement for subsequent lines
+def box_swap(boxes):
+    boxes = boxes.replace('\u251C','\u2502')
+    boxes = boxes.replace('\u2500',' ')
+    boxes = boxes.replace('\u2514',' ')
+    return boxes
