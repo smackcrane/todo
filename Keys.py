@@ -28,6 +28,8 @@ class Keys:
     SHIFT_RIGHT = 402
     RESIZE = 410
     CTRL_DOWN = 525
+    CTRL_LEFT = 545
+    CTRL_RIGHT = 560
     CTRL_UP = 566
     CTRL_SHIFT_DOWN = 526
     CTRL_SHIFT_LEFT = 546

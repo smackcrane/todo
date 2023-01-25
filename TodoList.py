@@ -50,7 +50,7 @@ class TodoList:
         self.screen.erase()
         # update everything in preparation
         self.root.refresh(self.cols, [], '', None)
-        self.update_top()
+        self.scroll()
 
         # starting from self.top task, just print until end of screen
         row = 0
@@ -87,9 +87,23 @@ class TodoList:
 
         self.screen.refresh()
 
-    #TODO
-    def update_top(self):
-        pass
+    # scroll window up or down
+    def scroll(self):
+        # check if we need to scroll down
+        t = self.grab_task(self.top_ID)
+        line_nums = []
+        while t and utils.ID_to_list(t.ID_str) <= self.active_ID:
+            line_nums += [len(t.textlines)]
+            t = t.next_task
+        while sum(line_nums) > self.rows:
+            n = self.grab_task(self.top_ID).next_task
+            if not n: break
+            self.top_ID = utils.ID_to_list(n.ID_str)
+            line_nums.pop(0)
+        # check if we need to scroll up
+        if self.active_ID < self.top_ID:
+            self.top_ID = self.active_ID.copy()
+
 
     # find and return task with given ID list
     def grab_task(self, ID_list):
@@ -113,11 +127,6 @@ class TodoList:
         return True
 
     #TODO
-    # display text at bottom of screen
-    def status(self, text):
-        pass
-
-    #TODO
     # handle terminal resizes
     def resize(self):
         pass
@@ -138,6 +147,26 @@ class TodoList:
     def left(self):
         if len(self.active_ID) > 1:
             self.active_ID.pop()
+
+    def move_task(self, direction):
+        # pop task
+        parent = self.grab_task(self.active_ID[:-1])
+        index = self.active_ID[-1]
+        t = parent.subtasks.pop(index)
+        if direction == 'up':
+            index = max(self.active_ID[-1] - 1, 0)
+        elif direction == 'down':
+            index = self.active_ID[-1] + 1
+        elif direction == 'left' and len(self.active_ID) > 1:
+            parent = self.grab_task(self.active_ID[:-2])
+            index = self.active_ID[-2] + 1
+        elif direction == 'right' and index > 0:
+            parent = self.grab_task(self.active_ID[:-1] + [index - 1])
+            index = len(parent.subtasks)
+        # if none of the conditions are met, it just goes back where it was
+        parent.subtasks.insert(index, t)
+        self.root.refresh(self.cols, [], '', None)
+        self.active_ID = utils.ID_to_list(t.ID_str)
 
     # create a new task in location relative to active task, and make active
     def new_task(self, location):
@@ -169,6 +198,10 @@ class TodoList:
         if k == Keys.RETURN or k == Keys.ESC:
             if self.edit_mode:
                 self.edit_mode = False
+        elif k == Keys.CTRL_UP:         self.move_task('up')
+        elif k == Keys.CTRL_DOWN:       self.move_task('down')
+        elif k == Keys.CTRL_LEFT:       self.move_task('left')
+        elif k == Keys.CTRL_RIGHT:      self.move_task('right')
         # if edit_mode, keys are passed to task except for the above
         elif self.edit_mode:
             self.active_task().edit(k)
